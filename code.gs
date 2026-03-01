@@ -172,6 +172,64 @@ function getColFlexible_(map, keywords) {
   return 0;
 }
 
+
+function getColStrict_(map, names) {
+  const headerKeys = Object.keys(map || {});
+  if (!headerKeys.length) return 0;
+
+  for (let i = 0; i < names.length; i++) {
+    const n = names[i];
+    if (map[n]) return map[n];
+  }
+
+  const normalizedNames = names.map(n => normalizeStr_(n));
+  for (let i = 0; i < headerKeys.length; i++) {
+    const h = headerKeys[i];
+    if (normalizedNames.includes(normalizeStr_(h))) {
+      return map[h];
+    }
+  }
+
+  return 0;
+}
+
+function canonicalHeader_(v){
+  return normalizeStr_(v)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getColByAliases_(headers, aliases){
+  const normalizedAliases = (aliases || []).map(canonicalHeader_).filter(Boolean);
+  if (!headers || !headers.length || !normalizedAliases.length) return 0;
+
+  // 1) Exact canonical match
+  for (let i = 0; i < headers.length; i++) {
+    const canonHeader = canonicalHeader_(headers[i]);
+    if (normalizedAliases.includes(canonHeader)) return i + 1;
+  }
+
+  // 2) Token-equality fallback (defensive for odd separators/smart chips)
+  for (let i = 0; i < headers.length; i++) {
+    const canonHeader = canonicalHeader_(headers[i]);
+    if (!canonHeader) continue;
+    const headerTokens = canonHeader.split(' ');
+    for (let j = 0; j < normalizedAliases.length; j++) {
+      const aliasTokens = normalizedAliases[j].split(' ');
+      if (headerTokens.length !== aliasTokens.length) continue;
+      let same = true;
+      for (let k = 0; k < aliasTokens.length; k++) {
+        if (headerTokens[k] !== aliasTokens[k]) { same = false; break; }
+      }
+      if (same) return i + 1;
+    }
+  }
+
+  return 0;
+}
+
+
 function normalizeRemitoId_(value){
   let txt = String(value || '').trim();
   if (!txt) return '';
@@ -1163,23 +1221,37 @@ function apiListarHistorial(q, limit){
   const lastRow = S.getLastRow();
   if (lastRow < 2) return [];
 
-  // Historial fijo en A:L (12 columnas), sin compactar/reindexar.
-  // A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11
+  const lastCol = Math.max(1, S.getLastColumn());
+  const headers = S.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(h => String(h || '').trim());
+
+  // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
+  // Se usa por aliases canónicos para tolerar acentos, íconos y variaciones de separadores.
   const IDX = {
-    nro: 0,        // A N° REMITO
-    ingreso: 1,    // B FECHA INGRESO
-    empresa: 2,    // C EMPRESA
-    cliente: 3,    // D CLIENTE
-    modelo: 5,     // F MODELO (E=MARCA)
-    linkRR: 6,     // G LINK RR (rich)
-    entrega: 7,    // H FECHA ENTREGA
-    moneda: 9,     // J MONEDA (I=FORMA DE PAGO)
-    total: 10,     // K TOTAL
-    linkRE: 11     // L LINK RE (rich)
+    nro: getColByAliases_(headers, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColByAliases_(headers, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColByAliases_(headers, ['EMPRESA']) - 1,
+    cliente: getColByAliases_(headers, ['CLIENTE']) - 1,
+    marca: getColByAliases_(headers, ['MARCA']) - 1,
+    modelo: getColByAliases_(headers, ['MODELO']) - 1,
+    linkRR: getColByAliases_(headers, ['LINK DE REMITO DE RECEPCIÓN', 'LINK DE REMITO DE RECEPCION', 'LINK REMITO DE RECEPCIÓN', 'LINK REMITO DE RECEPCION', 'LINK RR']) - 1,
+    fechaEntrega: getColByAliases_(headers, ['FECHA ENTREGA', 'FECHA DE ENTREGA']) - 1,
+    formaPago: getColByAliases_(headers, ['FORMA DE PAGO', 'FORMA PAGO']) - 1,
+    moneda: getColByAliases_(headers, ['MONEDA']) - 1,
+    total: getColByAliases_(headers, ['TOTAL']) - 1,
+    linkRE: getColByAliases_(headers, ['LINK DE REMITO DE ENTREGA', 'LINK REMITO DE ENTREGA', 'LINK RE']) - 1,
+    costoUsd: getColByAliases_(headers, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
+    precioUsd: getColByAliases_(headers, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
+    profit: getColByAliases_(headers, ['PROFIT', 'GANANCIA']) - 1
   };
 
+  const required = ['nro','ingreso','empresa','cliente','modelo','linkRR','fechaEntrega','linkRE','moneda','total'];
+  const missing = required.filter(k => IDX[k] < 0);
+  if (missing.length) {
+    throw new Error('Historial: faltan columnas requeridas para UI (' + missing.join(', ') + '). Encabezados detectados: ' + headers.join(' | '));
+  }
+
   const numRows = lastRow - 1;
-  const rng = S.getRange(2, 1, numRows, 12); // A:L siempre
+  const rng = S.getRange(2, 1, numRows, lastCol);
   const values = rng.getValues();
   const displays = rng.getDisplayValues();
   const rich = rng.getRichTextValues();
@@ -1222,6 +1294,8 @@ function apiListarHistorial(q, limit){
     return '';
   };
 
+  const pick = (arr, idx) => (idx >= 0 && idx < arr.length) ? arr[idx] : '';
+
   const toNorm = (v) => String(v || '').toLowerCase();
   const query = toNorm(String(q || '').trim());
   const max = Math.max(1, Number(limit || 50));
@@ -1231,10 +1305,24 @@ function apiListarHistorial(q, limit){
       const rowD0 = displays[0] || [];
       const rowV0 = values[0] || [];
       const rowR0 = rich[0] || [];
-      const dbgLinkRR = toLink(rowR0[IDX.linkRR], rowV0[IDX.linkRR], rowD0[IDX.linkRR]);
-      const dbgLinkRE = toLink(rowR0[IDX.linkRE], rowV0[IDX.linkRE], rowD0[IDX.linkRE]);
-      Logger.log('Historial debug displayValues[0..11]: ' + JSON.stringify(rowD0.slice(0, 12)));
-      Logger.log('Historial debug links rich[6]/rich[11]: ' + JSON.stringify({ linkRR: dbgLinkRR, linkRE: dbgLinkRE }));
+      const dbgLinkRR = toLink(pick(rowR0, IDX.linkRR), pick(rowV0, IDX.linkRR), pick(rowD0, IDX.linkRR));
+      const dbgLinkRE = toLink(pick(rowR0, IDX.linkRE), pick(rowV0, IDX.linkRE), pick(rowD0, IDX.linkRE));
+      Logger.log('Historial debug headers: ' + JSON.stringify(headers));
+      Logger.log('Historial debug map idx: ' + JSON.stringify(IDX));
+      Logger.log('Historial debug required mapping: ' + JSON.stringify({
+        nro: IDX.nro,
+        ingreso: IDX.ingreso,
+        empresa: IDX.empresa,
+        cliente: IDX.cliente,
+        modelo: IDX.modelo,
+        linkRR: IDX.linkRR,
+        fechaEntrega: IDX.fechaEntrega,
+        linkRE: IDX.linkRE,
+        moneda: IDX.moneda,
+        total: IDX.total
+      }));
+      Logger.log('Historial debug displayValues[0..' + (lastCol - 1) + ']: ' + JSON.stringify(rowD0.slice(0, lastCol)));
+      Logger.log('Historial debug links: ' + JSON.stringify({ linkRR: dbgLinkRR, linkRE: dbgLinkRE }));
     } catch (_) {}
   }
 
@@ -1244,18 +1332,18 @@ function apiListarHistorial(q, limit){
     const rowD = displays[i];
     const rowR = rich[i];
 
-    const nro = rowD[IDX.nro];
-    const fechaIngreso = toDateStr(rowV[IDX.ingreso], rowD[IDX.ingreso]);
-    const empresa = String(rowD[IDX.empresa] || '').trim();
-    const cliente = String(rowD[IDX.cliente] || '').trim();
-    const modelo = String(rowD[IDX.modelo] || '').trim();
-    const linkRR = toLink(rowR[IDX.linkRR], rowV[IDX.linkRR], rowD[IDX.linkRR]);
-    const fechaEntrega = toDateStr(rowV[IDX.entrega], rowD[IDX.entrega]);
-    const linkRE = toLink(rowR[IDX.linkRE], rowV[IDX.linkRE], rowD[IDX.linkRE]);
-    const moneda = String(rowD[IDX.moneda] || '').trim();
+    const nro = pick(rowD, IDX.nro);
+    const fechaIngreso = toDateStr(pick(rowV, IDX.ingreso), pick(rowD, IDX.ingreso));
+    const empresa = String(pick(rowD, IDX.empresa) || '').trim();
+    const cliente = String(pick(rowD, IDX.cliente) || '').trim();
+    const modelo = String(pick(rowD, IDX.modelo) || '').trim();
+    const linkRR = toLink(pick(rowR, IDX.linkRR), pick(rowV, IDX.linkRR), pick(rowD, IDX.linkRR));
+    const fechaEntrega = toDateStr(pick(rowV, IDX.fechaEntrega), pick(rowD, IDX.fechaEntrega));
+    const linkRE = toLink(pick(rowR, IDX.linkRE), pick(rowV, IDX.linkRE), pick(rowD, IDX.linkRE));
+    const moneda = String(pick(rowD, IDX.moneda) || '').trim();
 
-    const rawTotal = rowV[IDX.total];
-    const dispTotal = rowD[IDX.total];
+    const rawTotal = pick(rowV, IDX.total);
+    const dispTotal = pick(rowD, IDX.total);
     const total = String(dispTotal || rawTotal || '').trim();
 
     const item = {
