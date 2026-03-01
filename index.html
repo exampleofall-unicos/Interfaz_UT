@@ -594,7 +594,7 @@
     }
     .col-remito{ width:60px; text-align:center; }
     .col-fecha{ width:95px; text-align:center; }
-    .col-empresa{ width:110px; }
+    .col-empresa{ width:110px; text-align:center; }
     .col-cliente{ width:190px; }
     .col-modelo{ width:98px; }
     .col-pdf{ width:116px; text-align:center; }
@@ -625,6 +625,24 @@
       flex-shrink:0;
     }
     .hist-pdf-icon svg{ width:16px; height:16px; display:block; }
+    .hist-pdf-icon-only{
+      width:30px;
+      height:30px;
+      border-radius:8px;
+      border:1px solid rgba(59,130,246,.35);
+      background:rgba(59,130,246,.14);
+      color:#b7cff2;
+      cursor:pointer;
+      display:inline-grid;
+      place-items:center;
+      text-decoration:none;
+      transition:opacity .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .hist-pdf-icon-only:hover{
+      opacity:.95;
+      border-color:rgba(59,130,246,.5);
+      background:rgba(59,130,246,.2);
+    }
     .pdfBtn{
       display:inline-flex;
       align-items:center;
@@ -3542,6 +3560,16 @@
         </a>`;
     }
 
+    function histPdfIconOnlyCell(link){
+      const url = String(link || '').trim();
+      if (!url) return '';
+      if (!/^https?:\/\//i.test(url)) return '';
+      return `
+        <a class="hist-pdf-icon-only" href="${escapeAttr(url)}" target="_blank" rel="noopener" aria-label="Abrir PDF" title="Abrir PDF">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text-icon lucide-file-text"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+        </a>`;
+    }
+
     function getHistEmpresaOptions(){
       const fromRR = Array.isArray(state.empresas) ? state.empresas.map(x=>String(x || '').trim()).filter(Boolean) : [];
       if (fromRR.length) return Array.from(new Set(fromRR));
@@ -3609,8 +3637,8 @@
           <td class="col-cliente">${escapeHtml(r.cliente)}</td>
           <td class="col-modelo">${escapeHtml(r.modelo || '')}</td>
           <td class="col-pdf">${histPdfCell(r.linkRR || '')}</td>
-          <td class="col-fecha">${escapeHtml(r.entrega || '—')}</td>
-          <td class="col-pdf">${histPdfCell(r.linkRE || '')}</td>
+          <td class="col-fecha">${escapeHtml(r.entrega || '')}</td>
+          <td class="col-pdf">${histPdfIconOnlyCell(r.linkRE || '')}</td>
           <td class="col-moneda">${escapeHtml(r.moneda || '—')}</td>
           <td class="col-total mono right">${escapeHtml(getHistTotalText(r) || '—')}</td>
         </tr>

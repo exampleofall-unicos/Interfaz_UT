@@ -1227,6 +1227,16 @@ function apiListarHistorial(q, limit){
   // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
   // Se usa por aliases canónicos para tolerar acentos, íconos y variaciones de separadores.
   const IDX = {
+    nro: 0,
+    ingreso: 1,
+    empresa: 2,
+    cliente: 3,
+    modelo: 5,
+    linkRR: 6,
+    entrega: 7,
+    moneda: 9,
+    total: 10,
+    linkRE: 6 // Requerimiento actual: PDF ENTREGA toma columna G.
     nro: getColByAliases_(headers, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
     ingreso: getColByAliases_(headers, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
     empresa: getColByAliases_(headers, ['EMPRESA']) - 1,
@@ -1278,6 +1288,7 @@ function apiListarHistorial(q, limit){
   }
 
   const numRows = lastRow - 1;
+  const rng = S.getRange(2, 1, numRows, 12);
   const rng = S.getRange(2, 1, numRows, lastCol);
   const values = rng.getValues();
   const displays = rng.getDisplayValues();
@@ -1332,6 +1343,20 @@ function apiListarHistorial(q, limit){
       const rowD0 = displays[0] || [];
       const rowV0 = values[0] || [];
       const rowR0 = rich[0] || [];
+      const mapped0 = {
+        nro: String(rowD0[IDX.nro] || '').trim(),
+        ingreso: toDateStr(rowV0[IDX.ingreso], rowD0[IDX.ingreso]),
+        empresa: String(rowD0[IDX.empresa] || '').trim(),
+        cliente: String(rowD0[IDX.cliente] || '').trim(),
+        modelo: String(rowD0[IDX.modelo] || '').trim(),
+        linkRR: toLink(rowR0[IDX.linkRR], rowV0[IDX.linkRR], rowD0[IDX.linkRR]),
+        entrega: toDateStr(rowV0[IDX.entrega], rowD0[IDX.entrega]),
+        linkRE: toLink(rowR0[IDX.linkRE], rowV0[IDX.linkRE], rowD0[IDX.linkRE]),
+        moneda: String(rowD0[IDX.moneda] || '').trim(),
+        total: String(rowD0[IDX.total] || rowV0[IDX.total] || '').trim()
+      };
+      Logger.log('Historial raw primera fila A:L: ' + JSON.stringify(rowD0.slice(0, 12)));
+      Logger.log('Historial objeto mapeado primera fila: ' + JSON.stringify(mapped0));
       const dbgLinkRR = toLink(pick(rowR0, IDX.linkRR), pick(rowV0, IDX.linkRR), pick(rowD0, IDX.linkRR));
       const dbgLinkRE = toLink(pick(rowR0, IDX.linkRE), pick(rowV0, IDX.linkRE), pick(rowD0, IDX.linkRE));
       Logger.log('Historial debug headers: ' + JSON.stringify(headers));
@@ -1375,16 +1400,16 @@ function apiListarHistorial(q, limit){
     const total = String(dispTotal || rawTotal || '').trim();
 
     const item = {
-      nro: String(nro || '').trim(),
-      ingreso: fechaIngreso,
-      empresa: empresa,
-      cliente: cliente,
-      modelo: modelo,
-      linkRR: linkRR,
-      entrega: fechaEntrega,
-      linkRE: linkRE,
-      moneda: moneda,
-      total: total
+      nro: String(rowD[IDX.nro] || '').trim(),
+      ingreso: toDateStr(rowV[IDX.ingreso], rowD[IDX.ingreso]),
+      empresa: String(rowD[IDX.empresa] || '').trim(),
+      cliente: String(rowD[IDX.cliente] || '').trim(),
+      modelo: String(rowD[IDX.modelo] || '').trim(),
+      linkRR: toLink(rowR[IDX.linkRR], rowV[IDX.linkRR], rowD[IDX.linkRR]),
+      entrega: toDateStr(rowV[IDX.entrega], rowD[IDX.entrega]),
+      linkRE: toLink(rowR[IDX.linkRE], rowV[IDX.linkRE], rowD[IDX.linkRE]),
+      moneda: String(rowD[IDX.moneda] || '').trim(),
+      total: String(rowD[IDX.total] || rowV[IDX.total] || '').trim()
     };
 
     const searchable = [item.nro, item.cliente, item.modelo, item.ingreso, item.entrega]
@@ -1397,13 +1422,6 @@ function apiListarHistorial(q, limit){
     }
   }
 
-  if (out.length) {
-    try {
-      Logger.log(JSON.stringify(out[0]));
-    } catch (_) {}
-  }
-
-  // Se respeta el orden de la hoja (fila 2 hacia abajo).
   return out;
 }
 
