@@ -1221,8 +1221,11 @@ function apiListarHistorial(q, limit){
   const lastRow = S.getLastRow();
   if (lastRow < 2) return [];
 
-  // Historial fijo en A:L (12 columnas), sin compactar/reindexar.
-  // A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11
+  const lastCol = Math.max(1, S.getLastColumn());
+  const headers = S.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(h => String(h || '').trim());
+
+  // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
+  // Se usa por aliases canónicos para tolerar acentos, íconos y variaciones de separadores.
   const IDX = {
     nro: 0,
     ingreso: 1,
@@ -1234,10 +1237,59 @@ function apiListarHistorial(q, limit){
     moneda: 9,
     total: 10,
     linkRE: 6 // Requerimiento actual: PDF ENTREGA toma columna G.
+    nro: getColByAliases_(headers, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColByAliases_(headers, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColByAliases_(headers, ['EMPRESA']) - 1,
+    cliente: getColByAliases_(headers, ['CLIENTE']) - 1,
+    marca: getColByAliases_(headers, ['MARCA']) - 1,
+    modelo: getColByAliases_(headers, ['MODELO']) - 1,
+    linkRR: getColByAliases_(headers, ['LINK DE REMITO DE RECEPCIÓN', 'LINK DE REMITO DE RECEPCION', 'LINK REMITO DE RECEPCIÓN', 'LINK REMITO DE RECEPCION', 'LINK RR']) - 1,
+    fechaEntrega: getColByAliases_(headers, ['FECHA ENTREGA', 'FECHA DE ENTREGA']) - 1,
+    formaPago: getColByAliases_(headers, ['FORMA DE PAGO', 'FORMA PAGO']) - 1,
+    moneda: getColByAliases_(headers, ['MONEDA']) - 1,
+    total: getColByAliases_(headers, ['TOTAL']) - 1,
+    linkRE: getColByAliases_(headers, ['LINK DE REMITO DE ENTREGA', 'LINK REMITO DE ENTREGA', 'LINK RE']) - 1,
+    costoUsd: getColByAliases_(headers, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
+    precioUsd: getColByAliases_(headers, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
+    profit: getColByAliases_(headers, ['PROFIT', 'GANANCIA']) - 1
+  const map = _headerMapFromArray_(headers);
+
+  // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
+  // Se usa por nombre para evitar corrimientos al mover/insertar columnas.
+  const IDX = {
+    nro: getColStrict_(map, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColStrict_(map, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColStrict_(map, ['EMPRESA']) - 1,
+    cliente: getColStrict_(map, ['CLIENTE']) - 1,
+    marca: getColStrict_(map, ['MARCA']) - 1,
+    modelo: getColStrict_(map, ['MODELO']) - 1,
+    linkRR: getColStrict_(map, ['LINK DE REMITO DE RECEPCIÓN', 'LINK DE REMITO DE RECEPCION', 'LINK REMITO DE RECEPCIÓN', 'LINK REMITO DE RECEPCION', 'LINK RR']) - 1,
+    fechaEntrega: getColStrict_(map, ['FECHA ENTREGA', 'FECHA DE ENTREGA']) - 1,
+    formaPago: getColStrict_(map, ['FORMA DE PAGO', 'FORMA PAGO']) - 1,
+    moneda: getColStrict_(map, ['MONEDA']) - 1,
+    total: getColStrict_(map, ['TOTAL']) - 1,
+    linkRE: getColStrict_(map, ['LINK DE REMITO DE ENTREGA', 'LINK REMITO DE ENTREGA', 'LINK RE']) - 1,
+    costoUsd: getColStrict_(map, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
+    precioUsd: getColStrict_(map, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
+    profit: getColStrict_(map, ['PROFIT', 'GANANCIA']) - 1
+
+  const IDX = {
+    nro: getColFlexible_(map, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColFlexible_(map, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColFlexible_(map, ['EMPRESA']) - 1,
+    cliente: getColFlexible_(map, ['CLIENTE']) - 1,
+
   };
+
+  const required = ['nro','ingreso','empresa','cliente','modelo','linkRR','fechaEntrega','linkRE','moneda','total'];
+  const missing = required.filter(k => IDX[k] < 0);
+  if (missing.length) {
+    throw new Error('Historial: faltan columnas requeridas para UI (' + missing.join(', ') + '). Encabezados detectados: ' + headers.join(' | '));
+  }
 
   const numRows = lastRow - 1;
   const rng = S.getRange(2, 1, numRows, 12);
+  const rng = S.getRange(2, 1, numRows, lastCol);
   const values = rng.getValues();
   const displays = rng.getDisplayValues();
   const rich = rng.getRichTextValues();
@@ -1280,6 +1332,8 @@ function apiListarHistorial(q, limit){
     return '';
   };
 
+  const pick = (arr, idx) => (idx >= 0 && idx < arr.length) ? arr[idx] : '';
+
   const toNorm = (v) => String(v || '').toLowerCase();
   const query = toNorm(String(q || '').trim());
   const max = Math.max(1, Number(limit || 50));
@@ -1303,6 +1357,25 @@ function apiListarHistorial(q, limit){
       };
       Logger.log('Historial raw primera fila A:L: ' + JSON.stringify(rowD0.slice(0, 12)));
       Logger.log('Historial objeto mapeado primera fila: ' + JSON.stringify(mapped0));
+      const dbgLinkRR = toLink(pick(rowR0, IDX.linkRR), pick(rowV0, IDX.linkRR), pick(rowD0, IDX.linkRR));
+      const dbgLinkRE = toLink(pick(rowR0, IDX.linkRE), pick(rowV0, IDX.linkRE), pick(rowD0, IDX.linkRE));
+      Logger.log('Historial debug headers: ' + JSON.stringify(headers));
+      Logger.log('Historial debug map idx: ' + JSON.stringify(IDX));
+      Logger.log('Historial debug required mapping: ' + JSON.stringify({
+        nro: IDX.nro,
+        ingreso: IDX.ingreso,
+        empresa: IDX.empresa,
+        cliente: IDX.cliente,
+        modelo: IDX.modelo,
+        linkRR: IDX.linkRR,
+        fechaEntrega: IDX.fechaEntrega,
+        linkRE: IDX.linkRE,
+        moneda: IDX.moneda,
+        total: IDX.total
+      }));
+      Logger.log('Historial debug map idx: ' + JSON.stringify(IDX));
+      Logger.log('Historial debug displayValues[0..' + (lastCol - 1) + ']: ' + JSON.stringify(rowD0.slice(0, lastCol)));
+      Logger.log('Historial debug links: ' + JSON.stringify({ linkRR: dbgLinkRR, linkRE: dbgLinkRE }));
     } catch (_) {}
   }
 
@@ -1311,6 +1384,20 @@ function apiListarHistorial(q, limit){
     const rowV = values[i];
     const rowD = displays[i];
     const rowR = rich[i];
+
+    const nro = pick(rowD, IDX.nro);
+    const fechaIngreso = toDateStr(pick(rowV, IDX.ingreso), pick(rowD, IDX.ingreso));
+    const empresa = String(pick(rowD, IDX.empresa) || '').trim();
+    const cliente = String(pick(rowD, IDX.cliente) || '').trim();
+    const modelo = String(pick(rowD, IDX.modelo) || '').trim();
+    const linkRR = toLink(pick(rowR, IDX.linkRR), pick(rowV, IDX.linkRR), pick(rowD, IDX.linkRR));
+    const fechaEntrega = toDateStr(pick(rowV, IDX.fechaEntrega), pick(rowD, IDX.fechaEntrega));
+    const linkRE = toLink(pick(rowR, IDX.linkRE), pick(rowV, IDX.linkRE), pick(rowD, IDX.linkRE));
+    const moneda = String(pick(rowD, IDX.moneda) || '').trim();
+
+    const rawTotal = pick(rowV, IDX.total);
+    const dispTotal = pick(rowD, IDX.total);
+    const total = String(dispTotal || rawTotal || '').trim();
 
     const item = {
       nro: String(rowD[IDX.nro] || '').trim(),
