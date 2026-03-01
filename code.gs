@@ -1163,23 +1163,25 @@ function apiListarHistorial(q, limit){
   const lastRow = S.getLastRow();
   if (lastRow < 2) return [];
 
-  // Historial fijo en A:L (12 columnas), sin compactar/reindexar.
-  // A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11
+  const lastCol = Math.max(1, S.getLastColumn());
+  const headers = S.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(h => String(h || '').trim());
+  const map = _headerMapFromArray_(headers);
+
   const IDX = {
-    nro: 0,        // A N° REMITO
-    ingreso: 1,    // B FECHA INGRESO
-    empresa: 2,    // C EMPRESA
-    cliente: 3,    // D CLIENTE
-    modelo: 5,     // F MODELO (E=MARCA)
-    linkRR: 6,     // G LINK RR (rich)
-    entrega: 7,    // H FECHA ENTREGA
-    moneda: 9,     // J MONEDA (I=FORMA DE PAGO)
-    total: 10,     // K TOTAL
-    linkRE: 11     // L LINK RE (rich)
+    nro: getColFlexible_(map, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColFlexible_(map, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColFlexible_(map, ['EMPRESA']) - 1,
+    cliente: getColFlexible_(map, ['CLIENTE']) - 1,
+    modelo: getColFlexible_(map, ['MODELO']) - 1,
+    linkRR: getColFlexible_(map, ['LINK DE REMITO DE RECEPCIÓN', 'LINK DE REMITO DE RECEPCION', 'LINK REMITO DE RECEPCIÓN', 'LINK REMITO DE RECEPCION', 'LINK RR']) - 1,
+    entrega: getColFlexible_(map, ['FECHA ENTREGA', 'FECHA DE ENTREGA', 'ENTREGA']) - 1,
+    linkRE: getColFlexible_(map, ['LINK DE REMITO DE ENTREGA', 'LINK REMITO DE ENTREGA', 'LINK RE']) - 1,
+    moneda: getColFlexible_(map, ['MONEDA']) - 1,
+    total: getColFlexible_(map, ['TOTAL']) - 1
   };
 
   const numRows = lastRow - 1;
-  const rng = S.getRange(2, 1, numRows, 12); // A:L siempre
+  const rng = S.getRange(2, 1, numRows, lastCol);
   const values = rng.getValues();
   const displays = rng.getDisplayValues();
   const rich = rng.getRichTextValues();
