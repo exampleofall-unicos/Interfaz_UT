@@ -172,6 +172,64 @@ function getColFlexible_(map, keywords) {
   return 0;
 }
 
+
+function getColStrict_(map, names) {
+  const headerKeys = Object.keys(map || {});
+  if (!headerKeys.length) return 0;
+
+  for (let i = 0; i < names.length; i++) {
+    const n = names[i];
+    if (map[n]) return map[n];
+  }
+
+  const normalizedNames = names.map(n => normalizeStr_(n));
+  for (let i = 0; i < headerKeys.length; i++) {
+    const h = headerKeys[i];
+    if (normalizedNames.includes(normalizeStr_(h))) {
+      return map[h];
+    }
+  }
+
+  return 0;
+}
+
+function canonicalHeader_(v){
+  return normalizeStr_(v)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getColByAliases_(headers, aliases){
+  const normalizedAliases = (aliases || []).map(canonicalHeader_).filter(Boolean);
+  if (!headers || !headers.length || !normalizedAliases.length) return 0;
+
+  // 1) Exact canonical match
+  for (let i = 0; i < headers.length; i++) {
+    const canonHeader = canonicalHeader_(headers[i]);
+    if (normalizedAliases.includes(canonHeader)) return i + 1;
+  }
+
+  // 2) Token-equality fallback (defensive for odd separators/smart chips)
+  for (let i = 0; i < headers.length; i++) {
+    const canonHeader = canonicalHeader_(headers[i]);
+    if (!canonHeader) continue;
+    const headerTokens = canonHeader.split(' ');
+    for (let j = 0; j < normalizedAliases.length; j++) {
+      const aliasTokens = normalizedAliases[j].split(' ');
+      if (headerTokens.length !== aliasTokens.length) continue;
+      let same = true;
+      for (let k = 0; k < aliasTokens.length; k++) {
+        if (headerTokens[k] !== aliasTokens[k]) { same = false; break; }
+      }
+      if (same) return i + 1;
+    }
+  }
+
+  return 0;
+}
+
+
 function normalizeRemitoId_(value){
   let txt = String(value || '').trim();
   if (!txt) return '';
@@ -1166,20 +1224,20 @@ function apiListarHistorial(q, limit){
   // Historial fijo en A:L (12 columnas), sin compactar/reindexar.
   // A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11
   const IDX = {
-    nro: 0,        // A N° REMITO
-    ingreso: 1,    // B FECHA INGRESO
-    empresa: 2,    // C EMPRESA
-    cliente: 3,    // D CLIENTE
-    modelo: 5,     // F MODELO (E=MARCA)
-    linkRR: 6,     // G LINK RR (rich)
-    entrega: 7,    // H FECHA ENTREGA
-    moneda: 9,     // J MONEDA (I=FORMA DE PAGO)
-    total: 10,     // K TOTAL
-    linkRE: 11     // L LINK RE (rich)
+    nro: 0,
+    ingreso: 1,
+    empresa: 2,
+    cliente: 3,
+    modelo: 5,
+    linkRR: 6,
+    entrega: 7,
+    moneda: 9,
+    total: 10,
+    linkRE: 6 // Requerimiento actual: PDF ENTREGA toma columna G.
   };
 
   const numRows = lastRow - 1;
-  const rng = S.getRange(2, 1, numRows, 12); // A:L siempre
+  const rng = S.getRange(2, 1, numRows, 12);
   const values = rng.getValues();
   const displays = rng.getDisplayValues();
   const rich = rng.getRichTextValues();
@@ -1231,10 +1289,20 @@ function apiListarHistorial(q, limit){
       const rowD0 = displays[0] || [];
       const rowV0 = values[0] || [];
       const rowR0 = rich[0] || [];
-      const dbgLinkRR = toLink(rowR0[IDX.linkRR], rowV0[IDX.linkRR], rowD0[IDX.linkRR]);
-      const dbgLinkRE = toLink(rowR0[IDX.linkRE], rowV0[IDX.linkRE], rowD0[IDX.linkRE]);
-      Logger.log('Historial debug displayValues[0..11]: ' + JSON.stringify(rowD0.slice(0, 12)));
-      Logger.log('Historial debug links rich[6]/rich[11]: ' + JSON.stringify({ linkRR: dbgLinkRR, linkRE: dbgLinkRE }));
+      const mapped0 = {
+        nro: String(rowD0[IDX.nro] || '').trim(),
+        ingreso: toDateStr(rowV0[IDX.ingreso], rowD0[IDX.ingreso]),
+        empresa: String(rowD0[IDX.empresa] || '').trim(),
+        cliente: String(rowD0[IDX.cliente] || '').trim(),
+        modelo: String(rowD0[IDX.modelo] || '').trim(),
+        linkRR: toLink(rowR0[IDX.linkRR], rowV0[IDX.linkRR], rowD0[IDX.linkRR]),
+        entrega: toDateStr(rowV0[IDX.entrega], rowD0[IDX.entrega]),
+        linkRE: toLink(rowR0[IDX.linkRE], rowV0[IDX.linkRE], rowD0[IDX.linkRE]),
+        moneda: String(rowD0[IDX.moneda] || '').trim(),
+        total: String(rowD0[IDX.total] || rowV0[IDX.total] || '').trim()
+      };
+      Logger.log('Historial raw primera fila A:L: ' + JSON.stringify(rowD0.slice(0, 12)));
+      Logger.log('Historial objeto mapeado primera fila: ' + JSON.stringify(mapped0));
     } catch (_) {}
   }
 
@@ -1244,31 +1312,17 @@ function apiListarHistorial(q, limit){
     const rowD = displays[i];
     const rowR = rich[i];
 
-    const nro = rowD[IDX.nro];
-    const fechaIngreso = toDateStr(rowV[IDX.ingreso], rowD[IDX.ingreso]);
-    const empresa = String(rowD[IDX.empresa] || '').trim();
-    const cliente = String(rowD[IDX.cliente] || '').trim();
-    const modelo = String(rowD[IDX.modelo] || '').trim();
-    const linkRR = toLink(rowR[IDX.linkRR], rowV[IDX.linkRR], rowD[IDX.linkRR]);
-    const fechaEntrega = toDateStr(rowV[IDX.entrega], rowD[IDX.entrega]);
-    const linkRE = toLink(rowR[IDX.linkRE], rowV[IDX.linkRE], rowD[IDX.linkRE]);
-    const moneda = String(rowD[IDX.moneda] || '').trim();
-
-    const rawTotal = rowV[IDX.total];
-    const dispTotal = rowD[IDX.total];
-    const total = String(dispTotal || rawTotal || '').trim();
-
     const item = {
-      nro: String(nro || '').trim(),
-      ingreso: fechaIngreso,
-      empresa: empresa,
-      cliente: cliente,
-      modelo: modelo,
-      linkRR: linkRR,
-      entrega: fechaEntrega,
-      linkRE: linkRE,
-      moneda: moneda,
-      total: total
+      nro: String(rowD[IDX.nro] || '').trim(),
+      ingreso: toDateStr(rowV[IDX.ingreso], rowD[IDX.ingreso]),
+      empresa: String(rowD[IDX.empresa] || '').trim(),
+      cliente: String(rowD[IDX.cliente] || '').trim(),
+      modelo: String(rowD[IDX.modelo] || '').trim(),
+      linkRR: toLink(rowR[IDX.linkRR], rowV[IDX.linkRR], rowD[IDX.linkRR]),
+      entrega: toDateStr(rowV[IDX.entrega], rowD[IDX.entrega]),
+      linkRE: toLink(rowR[IDX.linkRE], rowV[IDX.linkRE], rowD[IDX.linkRE]),
+      moneda: String(rowD[IDX.moneda] || '').trim(),
+      total: String(rowD[IDX.total] || rowV[IDX.total] || '').trim()
     };
 
     const searchable = [item.nro, item.cliente, item.modelo, item.ingreso, item.entrega]
@@ -1281,13 +1335,6 @@ function apiListarHistorial(q, limit){
     }
   }
 
-  if (out.length) {
-    try {
-      Logger.log(JSON.stringify(out[0]));
-    } catch (_) {}
-  }
-
-  // Se respeta el orden de la hoja (fila 2 hacia abajo).
   return out;
 }
 
