@@ -1206,6 +1206,13 @@ function apiListarHistorial(q, limit){
     costoUsd: getColStrict_(map, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
     precioUsd: getColStrict_(map, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
     profit: getColStrict_(map, ['PROFIT', 'GANANCIA']) - 1
+
+  const IDX = {
+    nro: getColFlexible_(map, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColFlexible_(map, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColFlexible_(map, ['EMPRESA']) - 1,
+    cliente: getColFlexible_(map, ['CLIENTE']) - 1,
+
   };
 
   const numRows = lastRow - 1;
