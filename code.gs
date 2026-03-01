@@ -1242,6 +1242,33 @@ function apiListarHistorial(q, limit){
     costoUsd: getColByAliases_(headers, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
     precioUsd: getColByAliases_(headers, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
     profit: getColByAliases_(headers, ['PROFIT', 'GANANCIA']) - 1
+  const map = _headerMapFromArray_(headers);
+
+  // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
+  // Se usa por nombre para evitar corrimientos al mover/insertar columnas.
+  const IDX = {
+    nro: getColStrict_(map, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColStrict_(map, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColStrict_(map, ['EMPRESA']) - 1,
+    cliente: getColStrict_(map, ['CLIENTE']) - 1,
+    marca: getColStrict_(map, ['MARCA']) - 1,
+    modelo: getColStrict_(map, ['MODELO']) - 1,
+    linkRR: getColStrict_(map, ['LINK DE REMITO DE RECEPCIÓN', 'LINK DE REMITO DE RECEPCION', 'LINK REMITO DE RECEPCIÓN', 'LINK REMITO DE RECEPCION', 'LINK RR']) - 1,
+    fechaEntrega: getColStrict_(map, ['FECHA ENTREGA', 'FECHA DE ENTREGA']) - 1,
+    formaPago: getColStrict_(map, ['FORMA DE PAGO', 'FORMA PAGO']) - 1,
+    moneda: getColStrict_(map, ['MONEDA']) - 1,
+    total: getColStrict_(map, ['TOTAL']) - 1,
+    linkRE: getColStrict_(map, ['LINK DE REMITO DE ENTREGA', 'LINK REMITO DE ENTREGA', 'LINK RE']) - 1,
+    costoUsd: getColStrict_(map, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
+    precioUsd: getColStrict_(map, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
+    profit: getColStrict_(map, ['PROFIT', 'GANANCIA']) - 1
+
+  const IDX = {
+    nro: getColFlexible_(map, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColFlexible_(map, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColFlexible_(map, ['EMPRESA']) - 1,
+    cliente: getColFlexible_(map, ['CLIENTE']) - 1,
+
   };
 
   const required = ['nro','ingreso','empresa','cliente','modelo','linkRR','fechaEntrega','linkRE','moneda','total'];
@@ -1321,6 +1348,7 @@ function apiListarHistorial(q, limit){
         moneda: IDX.moneda,
         total: IDX.total
       }));
+      Logger.log('Historial debug map idx: ' + JSON.stringify(IDX));
       Logger.log('Historial debug displayValues[0..' + (lastCol - 1) + ']: ' + JSON.stringify(rowD0.slice(0, lastCol)));
       Logger.log('Historial debug links: ' + JSON.stringify({ linkRR: dbgLinkRR, linkRE: dbgLinkRE }));
     } catch (_) {}
