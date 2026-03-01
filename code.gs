@@ -1167,24 +1167,13 @@ function apiListarHistorial(q, limit){
   const headers = S.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(h => String(h || '').trim());
   const map = _headerMapFromArray_(headers);
 
-  // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
-  // Se usa por nombre para evitar corrimientos al mover/insertar columnas.
+
   const IDX = {
     nro: getColFlexible_(map, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
     ingreso: getColFlexible_(map, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
     empresa: getColFlexible_(map, ['EMPRESA']) - 1,
     cliente: getColFlexible_(map, ['CLIENTE']) - 1,
-    marca: getColFlexible_(map, ['MARCA']) - 1,
-    modelo: getColFlexible_(map, ['MODELO']) - 1,
-    linkRR: getColFlexible_(map, ['LINK DE REMITO DE RECEPCIÓN', 'LINK DE REMITO DE RECEPCION', 'LINK REMITO DE RECEPCIÓN', 'LINK REMITO DE RECEPCION', 'LINK RR']) - 1,
-    fechaEntrega: getColFlexible_(map, ['FECHA ENTREGA', 'FECHA DE ENTREGA', 'ENTREGA']) - 1,
-    formaPago: getColFlexible_(map, ['FORMA DE PAGO', 'FORMA PAGO']) - 1,
-    moneda: getColFlexible_(map, ['MONEDA']) - 1,
-    total: getColFlexible_(map, ['TOTAL']) - 1,
-    linkRE: getColFlexible_(map, ['LINK DE REMITO DE ENTREGA', 'LINK REMITO DE ENTREGA', 'LINK RE']) - 1,
-    costoUsd: getColFlexible_(map, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
-    precioUsd: getColFlexible_(map, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
-    profit: getColFlexible_(map, ['PROFIT', 'GANANCIA']) - 1
+
   };
 
   const numRows = lastRow - 1;
