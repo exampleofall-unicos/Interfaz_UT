@@ -193,6 +193,43 @@ function getColStrict_(map, names) {
   return 0;
 }
 
+function canonicalHeader_(v){
+  return normalizeStr_(v)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getColByAliases_(headers, aliases){
+  const normalizedAliases = (aliases || []).map(canonicalHeader_).filter(Boolean);
+  if (!headers || !headers.length || !normalizedAliases.length) return 0;
+
+  // 1) Exact canonical match
+  for (let i = 0; i < headers.length; i++) {
+    const canonHeader = canonicalHeader_(headers[i]);
+    if (normalizedAliases.includes(canonHeader)) return i + 1;
+  }
+
+  // 2) Token-equality fallback (defensive for odd separators/smart chips)
+  for (let i = 0; i < headers.length; i++) {
+    const canonHeader = canonicalHeader_(headers[i]);
+    if (!canonHeader) continue;
+    const headerTokens = canonHeader.split(' ');
+    for (let j = 0; j < normalizedAliases.length; j++) {
+      const aliasTokens = normalizedAliases[j].split(' ');
+      if (headerTokens.length !== aliasTokens.length) continue;
+      let same = true;
+      for (let k = 0; k < aliasTokens.length; k++) {
+        if (headerTokens[k] !== aliasTokens[k]) { same = false; break; }
+      }
+      if (same) return i + 1;
+    }
+  }
+
+  return 0;
+}
+
+
 function normalizeRemitoId_(value){
   let txt = String(value || '').trim();
   if (!txt) return '';
@@ -1186,6 +1223,25 @@ function apiListarHistorial(q, limit){
 
   const lastCol = Math.max(1, S.getLastColumn());
   const headers = S.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(h => String(h || '').trim());
+
+  // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
+  // Se usa por aliases canónicos para tolerar acentos, íconos y variaciones de separadores.
+  const IDX = {
+    nro: getColByAliases_(headers, ['N° REMITO', 'NRO REMITO', 'NRO', 'REMITO']) - 1,
+    ingreso: getColByAliases_(headers, ['FECHA INGRESO', 'INGRESO', 'FECHA DE INGRESO']) - 1,
+    empresa: getColByAliases_(headers, ['EMPRESA']) - 1,
+    cliente: getColByAliases_(headers, ['CLIENTE']) - 1,
+    marca: getColByAliases_(headers, ['MARCA']) - 1,
+    modelo: getColByAliases_(headers, ['MODELO']) - 1,
+    linkRR: getColByAliases_(headers, ['LINK DE REMITO DE RECEPCIÓN', 'LINK DE REMITO DE RECEPCION', 'LINK REMITO DE RECEPCIÓN', 'LINK REMITO DE RECEPCION', 'LINK RR']) - 1,
+    fechaEntrega: getColByAliases_(headers, ['FECHA ENTREGA', 'FECHA DE ENTREGA']) - 1,
+    formaPago: getColByAliases_(headers, ['FORMA DE PAGO', 'FORMA PAGO']) - 1,
+    moneda: getColByAliases_(headers, ['MONEDA']) - 1,
+    total: getColByAliases_(headers, ['TOTAL']) - 1,
+    linkRE: getColByAliases_(headers, ['LINK DE REMITO DE ENTREGA', 'LINK REMITO DE ENTREGA', 'LINK RE']) - 1,
+    costoUsd: getColByAliases_(headers, ['COSTO USD', 'COSTO TOTAL USD']) - 1,
+    precioUsd: getColByAliases_(headers, ['PRECIO USD', 'PRECIO TOTAL USD']) - 1,
+    profit: getColByAliases_(headers, ['PROFIT', 'GANANCIA']) - 1
   const map = _headerMapFromArray_(headers);
 
   // Mapeo completo de columnas de Historial (incluye las no usadas por esta vista).
@@ -1214,6 +1270,12 @@ function apiListarHistorial(q, limit){
     cliente: getColFlexible_(map, ['CLIENTE']) - 1,
 
   };
+
+  const required = ['nro','ingreso','empresa','cliente','modelo','linkRR','fechaEntrega','linkRE','moneda','total'];
+  const missing = required.filter(k => IDX[k] < 0);
+  if (missing.length) {
+    throw new Error('Historial: faltan columnas requeridas para UI (' + missing.join(', ') + '). Encabezados detectados: ' + headers.join(' | '));
+  }
 
   const numRows = lastRow - 1;
   const rng = S.getRange(2, 1, numRows, lastCol);
@@ -1272,6 +1334,20 @@ function apiListarHistorial(q, limit){
       const rowR0 = rich[0] || [];
       const dbgLinkRR = toLink(pick(rowR0, IDX.linkRR), pick(rowV0, IDX.linkRR), pick(rowD0, IDX.linkRR));
       const dbgLinkRE = toLink(pick(rowR0, IDX.linkRE), pick(rowV0, IDX.linkRE), pick(rowD0, IDX.linkRE));
+      Logger.log('Historial debug headers: ' + JSON.stringify(headers));
+      Logger.log('Historial debug map idx: ' + JSON.stringify(IDX));
+      Logger.log('Historial debug required mapping: ' + JSON.stringify({
+        nro: IDX.nro,
+        ingreso: IDX.ingreso,
+        empresa: IDX.empresa,
+        cliente: IDX.cliente,
+        modelo: IDX.modelo,
+        linkRR: IDX.linkRR,
+        fechaEntrega: IDX.fechaEntrega,
+        linkRE: IDX.linkRE,
+        moneda: IDX.moneda,
+        total: IDX.total
+      }));
       Logger.log('Historial debug map idx: ' + JSON.stringify(IDX));
       Logger.log('Historial debug displayValues[0..' + (lastCol - 1) + ']: ' + JSON.stringify(rowD0.slice(0, lastCol)));
       Logger.log('Historial debug links: ' + JSON.stringify({ linkRR: dbgLinkRR, linkRE: dbgLinkRE }));
